@@ -200,3 +200,202 @@ try:
     print(r.text)	# 输出后500个字符
 except:
     print('爬取失败')
+
+##################
+    
+import requests
+
+# with open('./sogou.html', 'w', encoding = 'utf-8') as f:
+#     f.write(page_text)
+
+word = input('关键词：')
+url = 'https://www.sogou.com/web'
+params = {'query':word, 'user-agent':'Mozilla/5.0'}
+response = requests.get(url = url, params = params)
+response.encoding = response.apparent_encoding
+page_text = response.text
+fileName = word + '.html'
+with open(fileName, 'w', encoding = 'utf-8') as f:
+    f.write(page_text)
+print(word, '下载成功')
+
+# 爬取豆瓣网中的电影详情数据
+# 当滚轮滑动到底部的时候，页面会发起ajax请求，且请求到一组电影详情数据
+# 当滚轮不滑动的时候，页面显示的电影数据，通过对浏览器地址栏的url发起请求是请求不到的
+
+url = 'https://movie.douban.com/j/chart/top_list'
+# 参数动态化 通过浏览器-控制台-网络捕获到如下参数
+# 控制台-网络-响应中的内容复制到JSON在线解析https://www.sojson.com/
+# 原网页地址为https://movie.douban.com/typerank?type_name=%E7%A7%91%E5%B9%BB&type=17&interval_id=100:90&action=
+params = {
+    "type": "17",
+    "interval_id": "100:90",
+    "action": "",
+    "start": "40",
+    "limit": "20",
+} 
+# type电影类型，start是从第40个开始取limit 20个
+headers = {
+    "User-Agent": 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.122 Safari/537.36'
+} # 这里请求头如果写入params里，执行response会报错
+response = requests.get(url=url, headers=headers, params=params)
+page_text = response.json()
+#将电影名称和评分进行解析 title和score来自于json源码
+for dic in page_text:
+    name = dic['title']
+    score = dic['score']
+    print(name+':'+score)
+
+
+# 肯德基餐厅查询：http://www.kfc.com.cn/kfccda/storelist/index.aspx
+# 通过点击查询才出来数据，是动态数据
+# 通过F12找到getstorelist-响应，解析json，在标头中提取请求URL，在标头-表单数据中提取字典
+url = 'http://www.kfc.com.cn/kfccda/ashx/GetStoreList.ashx?op=keyword'
+# 获取所有页的信息
+# 点击下一页时，控制台-网络-响应，发现标头的参数发生变化，即便pageIndex，因此for循环
+for pageNum in range(1,8):
+    data = {
+        "cname": "",
+        "pid": "",
+        "keyword": "北京",
+        "pageIndex": str(pageNum),
+        "pageSize": "10",
+    }
+# 使用post提交
+# 参数：data是用来实现参数动态化，等同于get方法中的params参数的作用
+    response = requests.post(url=url,headers=headers,data=data)
+    page_text = response.json()
+    for dic in page_text['Table1']:
+        pos = dic['addressDetail']
+        print(pos)
+
+####################
+        
+# 爬取药监总局中的企业详情数据 http://125.35.6.84:81/xk/
+# 打开一个公司的详情页，F12控制台-网络-刷新页面-找到地址栏对应的文件-响应-搜不到网页中的关键词-所以是动态数据
+# 用抓包工具进行全局搜索，单击地址栏对应的文件，ctrl+f进去全局搜索，搜索关键词比如粤妆20200022
+# 将搜到的信息复制到json解析中，另外将搜到的信息查看标头，提取url和表单数据中的ID
+# http://125.35.6.84:81/xk/itownet/portalAction.do?method=getXkzsById
+# id: ff83aff95c5541cdab5ca6e847514f88
+# 换另一家企业，重复上述步骤，发现http一样而id不一样
+# 每一家企业详情数据对应的请求url和请求方式是一样的，只有请求id不一样
+# 要爬取所有企业信息，则需要捕获每家企业的id，id很可能与名称在一起
+
+# 在首页即http://125.35.6.84:81/xk/中，控制台-网络-刷新页面-全局搜索企业名称-解析json
+# 请求url：http://125.35.6.84:81/xk/itownet/portalAction.do?method=getXkzsList
+# 请求参数（位于表单数据）：
+# on: true
+# page: 1
+# pageSize: 15
+# productName: 
+# conditionType: 1
+# applyname: 
+# applysn:
+
+url = 'http://125.35.6.84:81/xk/itownet/portalAction.do?method=getXkzsList'
+data = {
+    'on': 'true',
+    'page': '1',
+    'pageSize': '15',
+    'productName': '',
+    'conditionType': '1',
+    'applyname': '',
+    'applysn': '',
+}
+
+response = requests.post(url = url, headers = headers, data = data)
+all_company_list = response.json()['list'] # 原json中，list字典包含了企业基本信息
+for dic in all_company_list:
+    _id = dic['ID']
+    detail_url = 'http://125.35.6.84:81/xk/itownet/portalAction.do?method=getXkzsById'
+    data = {
+        'id':_id
+    }
+    response = requests.post(url = detail_url, headers = headers, data = data)
+    company_detail_dic = response.json()
+    person_name = company_detail_dic['businessPerson'] # 法定代表人
+    addr = company_detail_dic['epsProductAddress'] # 地址
+    print(person_name, addr)
+
+# 分析如何捕获多页数据
+
+
+# 爬取图片数据
+# 方式1：requests
+# 方式2：urllib
+#requests见前文
+#urllib
+from urllib import request
+url = 'http://pics.sc.chinaz.com/files/pic/pic9/201908/zzpic19447.jpg'
+request.urlretrieve(url = url,filename='./456.png')
+
+# requests的方式可以实现UA伪装，而urlib无法实现UA伪装
+
+# 站长素材图片数据的爬取
+# 反爬机制：图片懒加载。只有当图片数据被显示在可视化范围之内，则图片才会被加载出来。
+# 伪属性：src2，阻止图片加载的。只有当伪属性被变成真正的src属性值图片才会被加载出来。
+# 分析：
+# 图片数据是否为动态加载的数据
+# 除了可以在控制台-网络-响应选项卡中进行局部搜索发现存在jpg，已加载的图片在src标签中，未加载的在src2
+# 发现控制台-网络-预览中只显示了图片的名称，并没有显示图片数据
+import requests
+import re
+headers = {
+    'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.122 Safari/537.36'
+}
+url = 'http://sc.chinaz.com/tag_tupian/YaZhouMeiNv.html'
+page_text = requests.get(url, headers = headers).text #获取字符串形式的响应数据
+#通过正则进行图片地址的解析
+#<a target="_blank" href="http://sc.chinaz.com/tupian/200609013165.htm" alt="气质清新日本美女图片">
+#<img src2="http://pic.sc.chinaz.com/Files/pic/pic9/202006/apic25718_s.jpg" alt="气质清新日本美女图片">
+#</a>
+ex = '<a.*?<img src2="(.*?)" alt.*?</a>' # 这里的alt，是源码中到alt截止
+img_src_list = re.findall(ex, page_text, re.S) # re.S处理回车，不加这个回获取到空列表
+
+# 爬取的是https://m.vmall.com/help/hnrstoreaddr.htm中门店的详情数据
+# 如果可以捕获到一家门店的详情数据，可以保证捕获到所有门店的详情数据
+# 检测门店的详情数据是否为动态加载的数据，发现为动态加载，因为需要全局搜索
+# 请求道的URL：https://openapi.vmall.com/mcp/offlineshop/getShopById?portal=2&version=10&country=CN&shopId=108302&lang=zh-CN
+# 将问号及其后的参数去掉：https://openapi.vmall.com/mcp/offlineshop/getShopById
+# 在标头中发现字符串参数为下，shopId便是每家店的识别依据
+# portal: 2
+# version: 10
+# country: CN
+# shopId: 108302
+# lang: zh-CN
+
+# 捕获每一家店面的id值，首先返回https://m.vmall.com/help/hnrstoreaddr.htm
+# 全局搜索任意地址关键词，找到关键页面，提取标头中的URL：https://openapi.vmall.com/mcp/offlineshop/getShopList
+# 发现请求方式为：POST，关键词如下：
+# {"portal":2,"lang":"zh-CN","country":"CN","brand":1,"province":"广东省","city":"深圳市","pageNo":1,"pageSize":20}: 
+# 可以看出这里的参数为JSON键值对
+
+#捕获店面的id值
+#import json
+
+url = 'https://openapi.vmall.com/mcp/offlineshop/getShopList'
+data = {
+    "portal":2,
+    "lang":"zh-CN",
+    "country":"CN",
+    "brand":1,
+    "province":"河北",
+    "city":"邯郸",
+    "pageNo":1,
+    "pageSize":20
+}
+#json_data_ids = requests.post(url = url, headers = headers, data=json.dumps(data)).json()
+json_data_ids = requests.post(url = url, headers = headers, json = data).json()
+
+for dic in json_data_ids['shopInfos']:
+    _id = dic['id']#捕获到门店的id
+    detail_url = 'https://openapi.vmall.com/mcp/offlineshop/getShopById'
+    params = {
+          "portal": "2",
+          "version": "10",
+          "country": "CN",
+          "shopId": _id,
+          "lang": "zh-CN",
+    }
+    shop_detail = requests.get(url = detail_url, headers = headers, params = params).json()
+    print(shop_detail)
